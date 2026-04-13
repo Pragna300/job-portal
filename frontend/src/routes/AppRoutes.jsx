@@ -7,10 +7,10 @@ import AdminLayout from "../layouts/AdminLayout";
 import CompanyLayout from "../layouts/CompanyLayout";
 import UserLayout from "../pages/user/UserLayout";
 
-// pages
 import Login from "../pages/auth/Login";
 import Register from "../pages/auth/Register";
 import AdminDashboard from "../pages/admin/Dashboard";
+import ProctoringDashboard from "../pages/admin/ProctoringDashboard";
 import CompanyDashboard from "../pages/company/Dashboard";
 import Users from "../pages/admin/Users";
 import Companies from "../pages/admin/Companies";
@@ -30,12 +30,6 @@ import LegalLayout from "../layouts/LegalLayout";
 import Terms from "../pages/public/Terms";
 import Privacy from "../pages/public/Privacy";
 
-// AI Interview
-import VerificationPage from "../pages/interview/VerificationPage";
-import InterviewPage from "../pages/interview/InterviewPage";
-import ResultPage from "../pages/interview/ResultPage";
-import "../styles/interview.css";
-
 function RoleRedirect() {
   const { user } = useAuth();
 
@@ -54,11 +48,6 @@ export default function AppRoutes() {
         <Route path="/" element={<Landing />} />
         {/* Auto redirect after login */}
         <Route path="/redirect" element={<RoleRedirect />} />
-
-        {/* AI Interview */}
-        <Route path="/interview/verify" element={<VerificationPage />} />
-        <Route path="/interview/:token" element={<InterviewPage />} />
-        <Route path="/interview/result/:token" element={<ResultPage />} />
 
         {/* <Route path='/legal' element ={<LegalLayout/>} > */}
           <Route path="legal/terms" element={<Terms />} />
@@ -97,6 +86,7 @@ export default function AppRoutes() {
           }
         >
           <Route index element={<AdminDashboard />} />
+          <Route path="proctoring" element={<ProctoringDashboard />} />
           <Route path="users" element={<Users />} />
           <Route path="companies" element={<Companies />} />
           <Route path="jobs" element={<Jobs />} />

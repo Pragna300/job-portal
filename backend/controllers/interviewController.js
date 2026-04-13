@@ -1,5 +1,6 @@
 const pool = require("../config/db");
 const { callAI } = require("../services/aiService");
+const { extractResumeText } = require("../utils/resumeParser");
 const {
   resumeAnalysisPrompt,
   questionPrompt,
@@ -96,7 +97,7 @@ exports.generateQuestions = async (req, res) => {
     }
 
     // 3. Extract resume text
-    const resumeText = resumeUrl;
+    const resumeText = await extractResumeText(resumeUrl).catch(() => "");
 
     if (!resumeText || resumeText.length < 50) {
       return res.status(400).json({
@@ -159,7 +160,30 @@ exports.submitInterview = async (req, res) => {
       return res.status(400).json({ error: "Link expired" });
     }
 
-    const rawEval = await callAI(evaluationPrompt(answers));
+    // Feature 5: Integrate Proctoring Data
+    const proctoringRes = await pool.query(
+      "SELECT * FROM proctoring_sessions WHERE application_id = $1 AND candidate_id = $2 ORDER BY created_at DESC LIMIT 1",
+      [linkData.application_id, linkData.user_id]
+    );
+    
+    let proctoringData = {};
+    if (proctoringRes.rows.length) {
+      const ps = proctoringRes.rows[0];
+      proctoringData = {
+        integrity_score: ps.integrity_score,
+        violation_count: ps.violation_count,
+        warnings_sent: ps.warnings_sent
+      };
+      // Mark session as COMPLETED if it was still active
+      if (ps.status === 'ACTIVE') {
+        await pool.query(
+          "UPDATE proctoring_sessions SET status = 'COMPLETED', end_time = CURRENT_TIMESTAMP WHERE id = $1",
+          [ps.id]
+        );
+      }
+    }
+
+    const rawEval = await callAI(evaluationPrompt(answers, proctoringData));
     const evaluation = safeJsonParse(rawEval);
 
     if (!evaluation)
@@ -171,7 +195,7 @@ exports.submitInterview = async (req, res) => {
         linkData.user_id,
         linkData.application_id,
         evaluation.overall_score,
-        JSON.stringify(evaluation),
+        JSON.stringify({ ...evaluation, proctoring: proctoringData }),
       ]
     );
 
@@ -191,9 +215,9 @@ exports.submitInterview = async (req, res) => {
 
     res.json({
       message: "Interview submitted",
-      evaluation,
+      evaluation: { ...evaluation, proctoring: proctoringData },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-};
+};

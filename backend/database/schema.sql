@@ -118,11 +118,42 @@ CREATE TABLE IF NOT EXISTS interview_links (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_results (
+-- Proctoring Sessions Table
+CREATE TABLE IF NOT EXISTS proctoring_sessions (
   id SERIAL PRIMARY KEY,
-  user_id INT NOT NULL REFERENCES users(id),
+  candidate_id INT NOT NULL REFERENCES users(id),
   application_id INT NOT NULL REFERENCES applications(id),
-  score INT,
-  feedback JSONB,
+  token UUID NOT NULL,
+  status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'TERMINATED')),
+  integrity_score INT DEFAULT 100,
+  violation_count INT DEFAULT 0,
+  warnings_sent INT DEFAULT 0,
+  termination_reason VARCHAR(255),
+  session_summary TEXT,
+  start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  end_time TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Violations Log Table
+CREATE TABLE IF NOT EXISTS violations_log (
+  id SERIAL PRIMARY KEY,
+  proctoring_session_id INT NOT NULL REFERENCES proctoring_sessions(id),
+  violation_type VARCHAR(50) NOT NULL,
+  integrity_reduction INT DEFAULT 0,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Warnings Log Table
+CREATE TABLE IF NOT EXISTS warnings_log (
+  id SERIAL PRIMARY KEY,
+  proctoring_session_id INT NOT NULL REFERENCES proctoring_sessions(id),
+  warning_number INT NOT NULL,
+  message TEXT,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Update interview_results if necessary (already exists, but ensuring columns)
+-- ALTER TABLE interview_results ADD COLUMN IF NOT EXISTS questions_asked INT DEFAULT 0;
+-- ALTER TABLE interview_results ADD COLUMN IF NOT EXISTS questions_answered INT DEFAULT 0;
+-- ALTER TABLE interview_results ADD COLUMN IF NOT EXISTS average_score DECIMAL(3,2) DEFAULT 0;

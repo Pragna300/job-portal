@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Building2, Briefcase, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Users, Building2, Briefcase, Video, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { Sun, Moon, Monitor } from "lucide-react";
 
 const navLinks = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/admin/proctoring", label: "Live Proctoring", icon: Video },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/companies", label: "Companies", icon: Building2 },
   { to: "/admin/jobs", label: "Jobs", icon: Briefcase },

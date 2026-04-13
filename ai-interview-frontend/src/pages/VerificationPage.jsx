@@ -33,8 +33,14 @@ export default function VerificationPage() {
 
     try {
       const token = await verifyCandidate(urlToken, normalizedEmail);
-      navigate(`/interview/${token}`);
+      navigate(`/instructions/${token}`);
     } catch (submitError) {
+      // Feature: "make the access only once"
+      const errorMsg = submitError.response?.data?.error || "";
+      if (errorMsg.includes("already used") || errorMsg.includes("expired")) {
+        navigate("/access-denied", { state: { reason: errorMsg.includes("expired") ? "EXPIRED" : "ALREADY_COMPLETED" } });
+        return;
+      }
       setError(getErrorMessage(submitError));
     } finally {
       setIsSubmitting(false);

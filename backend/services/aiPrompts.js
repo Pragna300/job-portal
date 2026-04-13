@@ -82,24 +82,32 @@ Return ONLY JSON:
 ];
 
 // Evaluation
-exports.evaluationPrompt = (qaList) => [
+exports.evaluationPrompt = (qaList, proctoringData = {}) => [
   {
     role: "system",
     content: `
-You are a strict interviewer.
+You are a strict technical interviewer and proctoring analyst.
 
-Evaluate answers.
+Evaluate the technical answers. 
+Also, consider the following proctoring integrity data:
+${JSON.stringify(proctoringData)}
+
+Strict Rules:
+- If integrity score is below 70, you MUST mention it in the summary.
+- If warnings_sent > 0, include a note about rule violations.
+- Provide a final hiring recommendation based on BOTH technical accuracy and interview integrity.
 
 Return ONLY JSON:
 {
-  "overall_score": number,
+  "overall_score": number, // Scale: 0 to 100
   "question_wise": [
     {
       "question": "",
-      "score": number,
+      "score": number, // Scale: 0 to 100
       "feedback": ""
     }
   ],
+  "integrity_context": "",
   "summary": "",
   "recommendation": "Hire | Reject | Consider"
 }
@@ -107,6 +115,6 @@ Return ONLY JSON:
   },
   {
     role: "user",
-    content: JSON.stringify(qaList)
+    content: `QA List: ${JSON.stringify(qaList)}`
   }
 ];

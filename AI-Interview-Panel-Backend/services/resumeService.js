@@ -1,38 +1,27 @@
 const axios = require("axios");
-const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
+const pdfParse = require("pdf-parse");
 
 const extractResumeText = async (url) => {
   try {
-    console.log("Fetching URL:", url);
+    console.log("Fetching Resume URL:", url);
 
     const res = await axios.get(url, {
       responseType: "arraybuffer",
     });
 
-    console.log("Content-Type:", res.headers["content-type"]);
-
-    const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(res.data),
-    });
-
-    const pdf = await loadingTask.promise;
-
-    let text = "";
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-
-      const pageText = content.items.map((item) => item.str).join(" ");
-      text += pageText + "\n";
-    }
+    const data = await pdfParse(res.data);
+    const text = data.text || "";
 
     console.log("Extracted text length:", text.length);
 
+    if (text.length < 50) {
+      console.warn("Extracted text is very short. Might be a scanned image.");
+    }
+
     return text;
   } catch (err) {
-    console.error("Resume Parse Error FULL:", err);
-    throw new Error("Failed to parse resume");
+    console.error("Resume Parse Error (pdf-parse):", err.message);
+    throw new Error("Failed to parse resume content from URL");
   }
 };
 

@@ -67,8 +67,8 @@ function normalizeStringList(value) {
 }
 
 function extractResult(payload, fallbackAnswers) {
-  const source = payload?.data ?? payload;
-  const score = source?.score ?? source?.result?.score ?? 0;
+  const source = payload?.evaluation ?? payload?.data ?? payload;
+  const score = source?.overall_score ?? source?.score ?? source?.result?.score ?? 0;
   const summary = source?.summary ?? source?.result?.summary ?? "";
   const strengths = normalizeStringList(
     source?.strengths ?? source?.result?.strengths

@@ -7,7 +7,7 @@ const pool = connectionString
   : new Pool({
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
+      password: String(process.env.DB_PASSWORD),  // Force string to prevent SASL auth error
       database: process.env.DB_NAME,
       max: 10
     });

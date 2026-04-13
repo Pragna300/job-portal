@@ -7,8 +7,8 @@ const { sendInterviewSetupNotification, sendPostAssessmentRejectionNotification 
 const crypto = require('crypto');
 
 const buildInterviewLink = (token) => {
-  const base = process.env.FRONTEND_URL || 'http://localhost:5173';
-  return `${base.replace(/\/$/, '')}/interview/verify?token=${token}`;
+  const base = process.env.INTERVIEW_FRONTEND_URL || 'http://localhost:5174';
+  return `${base.replace(/\/$/, '')}/?token=${token}`;
 };
 
 const getProfile = async (req, res) => {
