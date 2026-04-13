@@ -11,14 +11,15 @@ const {
   sendInterviewShortlistNotification,
   createAtsStatusNotification,
   sendNotShortlistedNotification,
-  sendInterviewSetupNotification
+  sendInterviewSetupNotification,
+  sendHiredNotification
 } = require('../services/notificationService');
 const pool = require('../config/db');
 const crypto = require('crypto');
 
 const buildInterviewLink = (token) => {
-  const base = process.env.FRONTEND_URL || 'http://localhost:5173';
-  return `${base.replace(/\/$/, '')}/interview/verify?token=${token}`;
+  const base = process.env.INTERVIEW_FRONTEND_URL || 'http://localhost:5174';
+  return `${base.replace(/\/$/, '')}/?token=${token}`;
 };
 
 const applyForJob = async (req, res) => {
@@ -247,6 +248,14 @@ const updateApplicationStatus = async (req, res) => {
         job.title,
         companyOwnedByManager?.name,
         companyOwnedByManager?.manager_id
+      );
+    } else if (status === 'hired') {
+      await sendHiredNotification(
+        user.id,
+        user.email,
+        user.name,
+        job.title,
+        companyOwnedByManager?.name
       );
     } else {
       const subject = `Application Status Update for ${job.title}`;

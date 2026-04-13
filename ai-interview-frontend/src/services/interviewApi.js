@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
 function getApiUrl(path) {
   return `${API_BASE_URL}${path}`;
@@ -53,7 +53,6 @@ function extractQuestions(payload) {
     if (typeof entry === "string") {
       return entry;
     }
-
     return entry?.question ?? entry?.text ?? "";
   }).filter(Boolean);
 }
@@ -62,13 +61,12 @@ function normalizeStringList(value) {
   if (!Array.isArray(value)) {
     return [];
   }
-
   return value.filter((item) => typeof item === "string" && item.trim());
 }
 
 function extractResult(payload, fallbackAnswers) {
-  const source = payload?.data ?? payload;
-  const score = source?.score ?? source?.result?.score ?? 0;
+  const source = payload?.evaluation ?? payload?.data ?? payload;
+  const score = source?.overall_score ?? source?.score ?? source?.result?.score ?? 0;
   const summary = source?.summary ?? source?.result?.summary ?? "";
   const strengths = normalizeStringList(
     source?.strengths ?? source?.result?.strengths

@@ -4,15 +4,32 @@ const pool = require('../config/db');
 async function createNotification(userId, message, type) {
   if (!userId) return;
   try {
+    // 1. Insert new notification
     await pool.query(
       `INSERT INTO notifications (user_id, message, status, created_at) VALUES ($1, $2, $3, NOW())`,
       [userId, message, type]
     );
-  } catch (_) {
+
+    // 2. Trim to 15 latest notifications (Feature request: "next should only 15 notifications remaining")
     await pool.query(
-      `INSERT INTO notifications (user_id, message, type) VALUES ($1, $2, $3)`,
-      [userId, message, type]
+      `DELETE FROM notifications 
+       WHERE id NOT IN (
+         SELECT id FROM notifications 
+         WHERE user_id = $1 
+         ORDER BY created_at DESC 
+         LIMIT 15
+       ) AND user_id = $2`,
+      [userId, userId]
     );
+  } catch (_) {
+    try {
+      await pool.query(
+        `INSERT INTO notifications (user_id, message, type) VALUES ($1, $2, $3)`,
+        [userId, message, type]
+      );
+    } catch (e) {
+      console.warn("Notification insert fallback failed:", e.message);
+    }
   }
 }
 
@@ -200,6 +217,51 @@ ${companyName || 'Our Company'}`;
   );
 }
 
+async function sendHiredNotification(userId, email, candidateName, jobTitle, companyName) {
+  const subject = `Congratulations! You're hired for ${jobTitle} at ${companyName || 'our company'}`;
+  const text = `Dear ${candidateName},
+
+Congratulations! We are absolutely thrilled to inform you that you have successfully passed all rounds of the interview and assessment process. 
+We would like to formally offer you the position of ${jobTitle} at ${companyName || 'our company'}.
+
+Our HR department will be reaching out to you very soon in a separate email with your official offer letter, salary breakdown, and onboarding details.
+
+Welcome to the team!
+
+Warm regards,
+Human Resources & Talent Acquisition
+${companyName || 'Our Company'}`;
+
+  if (email) await sendEmail(email, subject, text);
+  
+  await createNotification(
+    userId,
+    `Congratulations! You have been successfully hired for the ${jobTitle} role. Await further HR communications.`,
+    'hired'
+  );
+}
+
+async function sendInterviewResultNotification(managerId, candidateName, score, jobTitle, summary) {
+  if (!managerId) return;
+
+  const message = `Interview Completed: ${candidateName} for ${jobTitle} (Score: ${score}%). Summary: ${summary || 'No summary provided.'}`;
+  
+  // 1. DB Notification
+  await createNotification(managerId, message, 'interview_result');
+
+  // 2. Optional: Manager Email (if manager email was available, but here we prioritize dashboard)
+  try {
+    const manager = await pool.query('SELECT email FROM users WHERE id = $1', [managerId]);
+    if (manager.rows.length) {
+      const subject = `Interview Result: ${candidateName} - ${jobTitle}`;
+      const text = `The technical AI interview for ${candidateName} is now complete.\n\nResult Summary:\nScore: ${score}%\nRole: ${jobTitle}\n\nYou can view the detailed proctoring and technical depth report in your manager dashboard.`;
+      await sendEmail(manager.rows[0].email, subject, text);
+    }
+  } catch (err) {
+    console.error("Manager Result Email Error:", err.message);
+  }
+}
+
 module.exports = {
   sendAssessmentNotification,
   sendInterviewShortlistNotification,
@@ -207,5 +269,7 @@ module.exports = {
   createAtsStatusNotification,
   sendInterviewSetupNotification,
   sendPostAssessmentRejectionNotification,
-  sendNotShortlistedNotification
+  sendNotShortlistedNotification,
+  sendHiredNotification,
+  sendInterviewResultNotification
 };

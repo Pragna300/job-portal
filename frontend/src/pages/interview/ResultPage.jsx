@@ -47,78 +47,27 @@ export default function ResultPage() {
         <div className="result-header">
           <div>
             <p className="eyebrow">Step 3</p>
-            <h1>Interview Result</h1>
+            <h1>Interview Successfully Submited</h1>
             <p className="muted">
-              {hasResult
-                ? "Assessment summary based on candidate responses."
-                : "Awaiting interview completion to generate assessment."}
+              Your video session and technical responses have been securely preserved.
             </p>
-          </div>
-          <div className="score-badge">
-            <span className="score-label">Score</span>
-            <strong>{result.score || "--"}</strong>
           </div>
         </div>
 
-        <section className="result-summary-box">
-          <h2>Summary</h2>
-          <p>{result.summary}</p>
+        <section className="result-summary-box" style={{ textAlign: "center", padding: "3rem 1rem", border: "1px dashed var(--border-color)", borderRadius: "12px" }}>
+          <h2 style={{ color: "var(--color-primary)", marginBottom: "1rem" }}>Evaluation Sent to Manager</h2>
+          <p style={{ color: "var(--text-secondary)", lineHeight: "1.6" }}>
+            Thank you for completing the AI-Assisted Interview Protocol. Your profile, proctoring metrics, 
+            and skill evaluations have been accurately compiled and safely delivered to the recruiting panel. <br/><br/>
+            You may now safely close this window. Our Human Resources department will get in touch with you 
+            shortly regarding your application timeline.
+          </p>
         </section>
 
-        <section className="result-grid">
-          <article className="result-panel">
-            <h2>Strengths</h2>
-            {result.strengths.length ? (
-              <ul className="result-list">
-                {result.strengths.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">No strengths data available.</p>
-            )}
-          </article>
-
-          <article className="result-panel">
-            <h2>Weaknesses</h2>
-            {result.weaknesses.length ? (
-              <ul className="result-list">
-                {result.weaknesses.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">No weaknesses data available.</p>
-            )}
-          </article>
-        </section>
-
-        <section className="result-panel answer-review-panel">
-          <div className="result-header-inline">
-            <h2>Answer Review</h2>
-            <span className="token-chip result-token-chip">Session: {token}</span>
-          </div>
-          {result.answers.length ? (
-            <div className="answer-review-list">
-              {result.answers.map((entry) => (
-                <article className="answer-review-item" key={entry.question}>
-                  <h3>{entry.question}</h3>
-                  <p>{entry.answer}</p>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="muted">No response data found for this session.</p>
-          )}
-        </section>
-
-        <div className="result-actions">
-          <button className="secondary-button" type="button" onClick={() => navigate("/interview/verify")}>
-            Back To Start
+        <div className="result-actions" style={{ justifyContent: "center" }}>
+          <button className="primary-button" type="button" onClick={() => window.location.href = "https://www.google.com"}>
+            Close & Exit Portal
           </button>
-          <Link className="primary-button result-link-button" to={`/interview/${token}`}>
-            Reopen Interview
-          </Link>
         </div>
       </section>
     </main>

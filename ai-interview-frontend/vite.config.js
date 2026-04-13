@@ -3,6 +3,19 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    global: "window",
+  },
+  optimizeDeps: {
+    include: [
+      "@tensorflow/tfjs",
+      "@tensorflow-models/coco-ssd",
+      "@vladmandic/face-api",
+      "axios",
+      "simple-peer",
+      "socket.io-client",
+    ],
+  },
   server: {
     port: 5174,
   },

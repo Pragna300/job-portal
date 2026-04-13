@@ -14,6 +14,8 @@ import {
   Sun,
   Moon,
   Monitor,
+  Bell,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -49,20 +51,12 @@ function ThemeToggle({ scrolled }) {
 
       {open && (
         <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
-          />
-          {/* Dropdown */}
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-10 z-50 bg-white dark:bg-[#1e293b] border border-[var(--border-color)] rounded-xl shadow-lg py-1 min-w-[130px]">
             {THEME_OPTIONS.map(({ value, icon: OptionIcon, label }) => (
               <button
                 key={value}
-                onClick={() => {
-                  setTheme(value);
-                  setOpen(false);
-                }}
+                onClick={() => { setTheme(value); setOpen(false); }}
                 className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition hover:bg-gray-100 dark:hover:bg-white/10 ${
                   theme === value
                     ? "text-[var(--color-primary)] font-semibold"
@@ -83,6 +77,115 @@ function ThemeToggle({ scrolled }) {
   );
 }
 
+function NotificationBell({ scrolled, user }) {
+  const [open, setOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchNotifs = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"}/api/notifications`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(
+            data.map((n) => ({
+              id: n.id,
+              title: n.title || "Notification",
+              message: n.message || n.content || "",
+              time: new Date(n.created_at).toLocaleString(),
+              read: n.is_read || false,
+            }))
+          );
+        }
+      } catch (_) {}
+    };
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`relative p-2 rounded-lg transition ${
+          scrolled
+            ? "text-[var(--text-primary)] hover:bg-gray-100 dark:hover:bg-white/10"
+            : "text-white hover:bg-white/10"
+        }`}
+        title="Notifications"
+      >
+        <Bell size={18} />
+        {unreadCount > 0 && (
+          <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-11 z-50 w-80 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
+              <span className="font-bold text-sm text-[var(--text-primary)]">
+                Notifications {unreadCount > 0 && <span className="ml-1 text-xs font-normal text-[var(--text-secondary)]">({unreadCount} new)</span>}
+              </span>
+              {notifications.length > 0 && (
+                <button
+                  onClick={() => setNotifications([])}
+                  className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1 transition"
+                >
+                  <Trash2 size={12} /> Clear All
+                </button>
+              )}
+            </div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-[var(--border-color)]">
+              {notifications.length === 0 ? (
+                <div className="p-8 text-center text-sm text-[var(--text-secondary)]">
+                  <Bell size={28} className="mx-auto mb-2 opacity-20" />
+                  <p>You're all caught up!</p>
+                </div>
+              ) : (
+                notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    className={`flex items-start gap-3 px-4 py-3 hover:bg-[var(--bg-secondary)] transition ${
+                      !n.read ? "bg-blue-50/40 dark:bg-blue-900/10" : ""
+                    }`}
+                  >
+                    {!n.read && (
+                      <span className="mt-1.5 shrink-0 w-2 h-2 rounded-full bg-blue-500" />
+                    )}
+                    <div className={`flex-1 min-w-0 ${n.read ? "pl-4" : ""}`}>
+                      <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{n.title}</p>
+                      <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="text-[10px] text-[var(--text-secondary)] mt-1 opacity-60">{n.time}</p>
+                    </div>
+                    <button
+                      onClick={() => setNotifications((prev) => prev.filter((x) => x.id !== n.id))}
+                      className="shrink-0 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/20 text-[var(--text-secondary)] hover:text-red-500 transition"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -95,9 +198,7 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === "Escape") setOpen(false);
-    };
+    const handleEscape = (e) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, []);
@@ -134,9 +235,7 @@ export default function Navbar() {
     <>
       <nav
         className={`fixed w-full z-50 backdrop-blur-md bg-white/10 border-b border-white/20 ${
-          scrolled
-            ? "bg-[var(--bg-primary)] shadow-md"
-            : "bg-transparent"
+          scrolled ? "bg-[var(--bg-primary)] shadow-md" : "bg-transparent"
         }`}
       >
         <div className="max-w-7xl mx-auto flex justify-between items-center px-6 py-4">
@@ -146,11 +245,7 @@ export default function Navbar() {
             <div className="w-16 h-16 rounded-lg">
               <img src={logo} alt="Logo" className="w-full h-full object-cover" />
             </div>
-            <span
-              className={`${
-                scrolled ? "text-[var(--text-primary)]" : "text-white"
-              } font-semibold text-3xl`}
-            >
+            <span className={`${scrolled ? "text-[var(--text-primary)]" : "text-white"} font-semibold text-3xl`}>
               Job Hunt
             </span>
           </Link>
@@ -161,36 +256,26 @@ export default function Navbar() {
               const Icon = item.icon;
               if (item.highlight) {
                 return (
-                  <Link
-                    key={index}
-                    to={item.to}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-black rounded-lg hover:opacity-90 transition"
-                  >
-                    {Icon && <Icon size={18} />}
-                    {item.label}
+                  <Link key={index} to={item.to} className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-black rounded-lg hover:opacity-90 transition">
+                    {Icon && <Icon size={18} />}{item.label}
                   </Link>
                 );
               }
               return (
-                <Link
-                  key={index}
-                  to={item.to}
-                  className={`flex items-center gap-2 ${
-                    scrolled ? "text-[var(--text-primary)]" : "text-white"
-                  } hover:opacity-80 transition`}
-                >
-                  {Icon && <Icon size={18} />}
-                  {item.label}
+                <Link key={index} to={item.to} className={`flex items-center gap-2 ${scrolled ? "text-[var(--text-primary)]" : "text-white"} hover:opacity-80 transition`}>
+                  {Icon && <Icon size={18} />}{item.label}
                 </Link>
               );
             })}
 
             {user && (
               <button onClick={logout} className="flex items-center gap-2 text-red-500">
-                <LogOut size={18} />
-                Logout
+                <LogOut size={18} /> Logout
               </button>
             )}
+
+            {/* Notification Bell (logged-in users only) */}
+            {user && <NotificationBell scrolled={scrolled} user={user} />}
 
             {/* Theme Toggle */}
             <ThemeToggle scrolled={scrolled} />
@@ -198,14 +283,11 @@ export default function Navbar() {
 
           {/* Mobile Button */}
           <div className="md:hidden flex items-center gap-2">
+            {user && <NotificationBell scrolled={scrolled} user={user} />}
             <ThemeToggle scrolled={scrolled} />
             <button
               onClick={() => setOpen(!open)}
-              className={`p-2 rounded-lg transition ${
-                scrolled
-                  ? "text-[var(--text-primary)] hover:bg-gray-100"
-                  : "text-white hover:bg-white/10"
-              }`}
+              className={`p-2 rounded-lg transition ${scrolled ? "text-[var(--text-primary)] hover:bg-gray-100" : "text-white hover:bg-white/10"}`}
             >
               {open ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -216,10 +298,7 @@ export default function Navbar() {
       {/* Mobile Menu */}
       {open && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
-          />
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
           <div className="fixed right-0 top-0 h-full w-80 bg-[var(--bg-primary)] shadow-2xl animate-slide-in">
             <div className="flex flex-col h-full">
               <div className="p-6 border-b border-[var(--border-color)] flex items-center gap-3">
@@ -233,14 +312,10 @@ export default function Navbar() {
                 {links.map((item, index) => {
                   const Icon = item.icon;
                   return (
-                    <Link
-                      key={index}
-                      to={item.to}
-                      onClick={() => setOpen(false)}
+                    <Link key={index} to={item.to} onClick={() => setOpen(false)}
                       className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-[var(--text-primary)]"
                     >
-                      {Icon && <Icon size={20} />}
-                      {item.label}
+                      {Icon && <Icon size={20} />}{item.label}
                     </Link>
                   );
                 })}
@@ -250,8 +325,7 @@ export default function Navbar() {
                     onClick={() => { logout(); setOpen(false); }}
                     className="flex items-center gap-3 px-4 py-3 text-red-500 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 w-full"
                   >
-                    <LogOut size={20} />
-                    Logout
+                    <LogOut size={20} /> Logout
                   </button>
                 )}
               </div>

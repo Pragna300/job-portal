@@ -2,11 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
-
 dotenv.config();
 
-const app = express();
+const http = require('http');
+const initializeSocket = require('./utils/socketHandler');
 
+const app = express();
 
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.url}`);
@@ -27,7 +28,8 @@ const jobRoutes = require('./routes/job.routes');
 const applicationRoutes = require('./routes/application.routes');
 const userRoutes = require('./routes/user.routes');
 const resumeRoutes = require('./routes/resumeRoutes');
-const interviewRoutes = require('./routes/interview.routes');
+const notificationRoutes = require('./routes/notification.routes');
+const proctoringRoutes = require('./routes/proctoring.routes');
 const interviewPanelRoutes = require('./routes/interviewPanel.routes');
 
 app.use('/auth', authRoutes);
@@ -37,7 +39,8 @@ app.use('/jobs', jobRoutes);
 app.use('/applications', applicationRoutes);
 app.use('/users', userRoutes);
 app.use('/api/resume', resumeRoutes);
-app.use('/api/interviews', interviewRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/proctoring', proctoringRoutes);
 app.use('/api/interview', interviewPanelRoutes);
 
 // Health check
@@ -46,6 +49,11 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = http.createServer(app);
+
+// Initialize Socket.io
+initializeSocket(server);
+
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

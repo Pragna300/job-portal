@@ -1,5 +1,6 @@
 const pool = require("../db/db");
 const { callAI } = require("../services/aiService");
+const { extractResumeText } = require("../services/resumeService");
 const {
   resumeAnalysisPrompt,
   questionPrompt,
@@ -37,7 +38,7 @@ exports.verifyUser = async (req, res) => {
     if (!user.rows.length)
       return res.status(401).json({ error: "Invalid email" });
 
-    res.json({ message: "Verified" });
+    res.json({ message: "Verified", token: linkData.token });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -88,19 +89,18 @@ exports.generateQuestions = async (req, res) => {
 
     const resumeUrl = application.rows[0].resume_url;
 
-    // Optional safety check
-    if (!resumeUrl.startsWith("http")) {
-      return res.status(400).json({
-        error: "Invalid resume URL format",
-      });
+    // 3. Extract resume text using robust service
+    let resumeText = "";
+    try {
+      resumeText = await extractResumeText(resumeUrl);
+    } catch (e) {
+      console.warn("PDF extraction failed, falling back to URL string:", e.message);
+      resumeText = `Candidate Resume URL: ${resumeUrl}`;
     }
 
-    // 3. Extract resume text
-    const resumeText = resumeUrl;
-
-    if (!resumeText || resumeText.length < 50) {
+    if (!resumeText || resumeText.length < 10) {
       return res.status(400).json({
-        error: "Resume content is too short or unreadable",
+        error: "Resume content is unreadable",
       });
     }
 
@@ -140,38 +140,124 @@ exports.submitInterview = async (req, res) => {
   const { token, answers } = req.body;
 
   try {
-    const rawEval = await callAI(evaluationPrompt(answers));
-    const evaluation = safeJsonParse(rawEval);
-
-    if (!evaluation)
-      return res.status(500).json({ error: "AI evaluation failed" });
-
     const link = await pool.query(
       "SELECT * FROM interview_links WHERE token=$1",
       [token]
     );
 
-    const userId = link.rows[0].user_id;
+    if (!link.rows.length) {
+      return res.status(400).json({ error: "Invalid token" });
+    }
 
+    const linkData = link.rows[0];
+
+    if (linkData.is_used) {
+      return res.status(400).json({ error: "Link already used" });
+    }
+
+    // 1. Fetch Proctoring Data for this session
+    const proctoringRes = await pool.query(
+      "SELECT * FROM proctoring_sessions WHERE application_id = $1 AND candidate_id = $2 ORDER BY created_at DESC LIMIT 1",
+      [linkData.application_id, linkData.user_id]
+    );
+    
+    let proctoringData = {
+      integrity_score: 100,
+      violation_count: 0,
+      warnings_sent: 0,
+      status: 'NOT_STARTED'
+    };
+
+    if (proctoringRes.rows.length) {
+      const ps = proctoringRes.rows[0];
+      proctoringData = {
+        integrity_score: ps.integrity_score,
+        violation_count: ps.violation_count,
+        warnings_sent: ps.warnings_sent,
+        status: ps.status
+      };
+      
+      // Update session status to COMPLETED if active
+      if (ps.status === 'ACTIVE') {
+        await pool.query(
+          "UPDATE proctoring_sessions SET status = 'COMPLETED', end_time = CURRENT_TIMESTAMP WHERE id = $1",
+          [ps.id]
+        );
+      }
+    }
+
+    // 2. Call AI Evaluation with added proctoring context
+    const rawEval = await callAI(evaluationPrompt(answers, proctoringData));
+    const evaluation = safeJsonParse(rawEval);
+
+    if (!evaluation)
+      return res.status(500).json({ error: "AI evaluation failed" });
+
+    const userId = linkData.user_id;
+    const applicationId = linkData.application_id;
+
+    // 3. Store Results
     await pool.query(
-      "INSERT INTO interview_results(user_id, score, feedback) VALUES($1,$2,$3)",
+      "INSERT INTO interview_results(user_id, application_id, score, feedback) VALUES($1, $2, $3, $4)",
       [
         userId,
+        applicationId,
         evaluation.overall_score,
-        JSON.stringify(evaluation),
+        JSON.stringify({ ...evaluation, proctoring: proctoringData }),
       ]
     );
 
+    // 4. Mark Link as Used
     await pool.query(
       "UPDATE interview_links SET is_used=true WHERE token=$1",
       [token]
     );
 
+    // 5. Update Application Status (Keep Core App in sync)
+    try {
+      await pool.query(
+        "UPDATE applications SET status = $1, test_score = $2, test_status = $3 WHERE id = $4",
+        ["test_completed", evaluation.overall_score, "completed", linkData.application_id]
+      );
+    } catch (e) {
+      console.warn("Application status sync error:", e.message);
+    }
+
+    // Notify Manager about result (Cross-service call to Core Backend)
+    try {
+      const axios = require('axios');
+      const managerInfo = await pool.query(
+        `SELECT c.manager_id, u.name as candidate_name, j.title as job_title 
+         FROM applications a 
+         JOIN jobs j ON a.job_id = j.id 
+         JOIN companies c ON j.company_id = c.id 
+         JOIN users u ON a.user_id = u.id 
+         WHERE a.id = $1`,
+        [linkData.application_id]
+      );
+
+      if (managerInfo.rows.length) {
+        const { manager_id, candidate_name, job_title } = managerInfo.rows[0];
+        const coreBackendUrl = process.env.CORE_BACKEND_URL || "http://localhost:5000";
+        
+        await axios.post(`${coreBackendUrl}/api/notifications/notify-manager-result`, {
+          managerId: manager_id,
+          candidateName: candidate_name,
+          score: evaluation.overall_score,
+          jobTitle: job_title,
+          summary: evaluation.summary || evaluation.overall_feedback || "No summary available."
+        }).catch(err => console.warn("Manager notification call failed:", err.message));
+      }
+    } catch (e) {
+      console.warn("Manager notification logic failed:", e.message);
+    }
+
     res.json({
       message: "Interview submitted",
-      evaluation,
+      evaluation: { ...evaluation, proctoring: proctoringData },
     });
   } catch (err) {
+    console.error("Submit Interview Error:", err);
     res.status(500).json({ error: err.message });
   }
 };
