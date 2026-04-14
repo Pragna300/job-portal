@@ -27,68 +27,55 @@ export default function ProctoringCard({ candidate, onWarning, onStop, socket })
       }
     };
 
-    // ── Create initiator peer (Admin always initiates) ──────────────────
-    const createPeer = () => {
-      destroy();
-      console.log("[Admin WebRTC] Creating initiator peer for", candidate.candidate_id);
-      setStatus("connecting");
-
-      const peer = new Peer({ initiator: true, trickle: false, config: ICE_SERVERS });
-      peerRef.current = peer;
-
-      peer.on("signal", (signal) => {
-        console.log("[Admin WebRTC] Sending offer...");
-        socket.emit("signal", {
-          signal,
-          to:          String(candidate.candidate_id),
-          candidateId: String(candidate.candidate_id),
-        });
-      });
-
-      peer.on("stream", (stream) => {
-        console.log("[Admin WebRTC] Got stream:", stream.id, "tracks:", stream.getTracks().length);
-        // First stream → webcam, second → screen
-        if (videoRef.current && !videoRef.current.srcObject) {
-          videoRef.current.srcObject = stream;
-          setStatus("live");
-        } else if (screenRef.current && (!screenRef.current.srcObject || screenRef.current.srcObject.id !== stream.id)) {
-          screenRef.current.srcObject = stream;
-        }
-      });
-
-      peer.on("connect", () => {
-        console.log("[Admin WebRTC] P2P connection established!");
-        setStatus("live");
-      });
-
-      peer.on("error", (err) => {
-        console.error("[Admin WebRTC] Error:", err.message);
-        setStatus("error");
-      });
-
-      peer.on("close", () => {
-        console.log("[Admin WebRTC] Peer closed");
-        setStatus("waiting");
-        peerRef.current = null;
-      });
-    };
-
-    // ── Named handlers for proper cleanup ──────────────────────────────
-    const onCandidateReady = (data) => {
-      if (String(data.candidateId) !== String(candidate.candidate_id)) return;
-      console.log("[Admin WebRTC] Candidate is ready → initiating peer");
-      createPeer();
-    };
-
     const onSignal = (data) => {
       if (String(data.candidateId) !== String(candidate.candidate_id)) return;
-      if (!peerRef.current) return;
-      console.log("[Admin WebRTC] Received answer from candidate");
+      
+      if (!peerRef.current) {
+        console.log("[Admin WebRTC] Got offer from candidate, creating non-initiator peer");
+        setStatus("connecting");
+        const peer = new Peer({ initiator: false, trickle: true, config: ICE_SERVERS });
+        peerRef.current = peer;
+
+        peer.on("signal", (signal) => {
+          socket.emit("signal", {
+            signal,
+            to: String(candidate.candidate_id),
+            candidateId: String(candidate.candidate_id),
+          });
+        });
+
+        peer.on("stream", (stream) => {
+          console.log("[Admin WebRTC] Got stream:", stream.id, "tracks:", stream.getTracks().length);
+          if (videoRef.current && !videoRef.current.srcObject) {
+            videoRef.current.srcObject = stream;
+            setStatus("live");
+          } else if (screenRef.current && (!screenRef.current.srcObject || screenRef.current.srcObject.id !== stream.id)) {
+            screenRef.current.srcObject = stream;
+          }
+        });
+
+        peer.on("connect", () => {
+          console.log("[Admin WebRTC] P2P connection established!");
+          setStatus("live");
+        });
+
+        peer.on("error", (err) => {
+          console.error("[Admin WebRTC] Error:", err.message);
+          setStatus("error");
+        });
+
+        peer.on("close", () => {
+          console.log("[Admin WebRTC] Peer closed");
+          setStatus("waiting");
+          peerRef.current = null;
+        });
+      }
+
+      console.log("[Admin WebRTC] Received signal chunk from candidate");
       try { peerRef.current.signal(data.signal); } catch (e) { console.error(e); }
     };
 
-    // When candidate comes online (joins their socket room) → request re-stream
-    // This handles the case where admin was already watching but candidate disconnected and reconnected
+    // When candidate comes online (joins their socket room) → request stream connection
     const onCandidateOnline = (data) => {
       if (String(data.candidateId) !== String(candidate.candidate_id)) return;
       console.log("[Admin WebRTC] Candidate came online → requesting stream");
@@ -96,16 +83,16 @@ export default function ProctoringCard({ candidate, onWarning, onStop, socket })
     };
 
     // ── Register listeners ─────────────────────────────────────────────
-    socket.on("candidate-ready-to-stream", onCandidateReady);
     socket.on("signal",                    onSignal);
     socket.on("candidate-online",          onCandidateOnline);
 
     // Initial: tell candidate we want to watch (in case they're already in their room)
-    console.log("[Admin WebRTC] Sending initial handshake request...");
-    socket.emit("request-stream-handshake", { candidateId: String(candidate.candidate_id) });
+    if (status === "waiting") {
+      console.log("[Admin WebRTC] Sending initial handshake request...");
+      socket.emit("request-stream-handshake", { candidateId: String(candidate.candidate_id) });
+    }
 
     return () => {
-      socket.off("candidate-ready-to-stream", onCandidateReady);
       socket.off("signal",                    onSignal);
       socket.off("candidate-online",          onCandidateOnline);
       destroy();

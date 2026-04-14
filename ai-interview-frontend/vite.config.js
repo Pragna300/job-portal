@@ -5,6 +5,8 @@ export default defineConfig({
   plugins: [react()],
   define: {
     global: "window",
+    "process.env": {},
+    "process.nextTick": "((fn) => setTimeout(fn, 0))",
   },
   optimizeDeps: {
     include: [

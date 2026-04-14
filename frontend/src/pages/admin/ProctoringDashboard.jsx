@@ -25,7 +25,7 @@ export default function ProctoringDashboard() {
     fetchLiveCandidates();
 
     // Initialize Socket
-    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
     const socket = io(`${baseURL}/admin`, { transports: ["websocket", "polling"] });
 
     socket.on("connect", () => {

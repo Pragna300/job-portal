@@ -5,6 +5,7 @@ import * as faceapi from "@vladmandic/face-api";
 import * as tf from "@tensorflow/tfjs";
 import * as cocoSsd from "@tensorflow-models/coco-ssd";
 import Peer from "simple-peer";
+import axios from "axios";
 import { getInterviewQuestions, submitInterview } from "../services/interviewApi";
 import api from "../services/api";
 
@@ -189,7 +190,7 @@ export default function InterviewPage() {
   // 1. Initialize Proctoring & WebRTC
   useEffect(() => {
     let isMounted = true;
-    const baseURL = "http://localhost:5000"; // Main backend for proctoring
+    const baseURL = "http://localhost:5001"; // Main backend for proctoring
 
     async function initProctoring() {
       try {
@@ -214,13 +215,15 @@ export default function InterviewPage() {
 
         // Start Backend Session
         try {
-          const sessionRes = await api.post("/api/proctoring/start-session", { token });
+          const sessionRes = await axios.post("http://localhost:5001/api/proctoring/start-session", { token });
           sessionIdRef.current = sessionRes.data.sessionId;
           const serverCandidateId = sessionRes.data.candidateId || "self";
           setSessionId(sessionRes.data.sessionId);
           
+          console.log("[InterviewPage] Start Session SUCCESS:", sessionRes.data);
+
           // Connect Socket with REAL candidateId
-          const socket = io(`${baseURL}/candidate`);
+          const socket = io(`http://localhost:5001/candidate`);
           socketRef.current = socket;
           socket.emit("join-session", { candidateId: serverCandidateId, sessionId: sessionRes.data.sessionId });
 
@@ -228,24 +231,27 @@ export default function InterviewPage() {
           // Candidate always emits ready first; admin creates the initiator peer.
           // This avoids race conditions from request-stream-handshake timing.
 
-          // Step 1: Handle admin's offer signal → lazily create non-initiator peer
           socket.on("signal", (data) => {
-            if (!data.signal) return;
+            if (!data.signal || !peerRef.current) return;
+            try { peerRef.current.signal(data.signal); } catch (e) { console.error("[Candidate WebRTC] Signal err:", e); }
+          });
+
+          // Step 3: Admin joins and requests stream
+          socket.on("request-stream-handshake", () => {
             const cam = mediaStreamRef.current;
             const scr = screenStreamRef.current;
             if (!cam || !scr) return;
 
-            // Destroy old peer if admin reconnected
+            console.log("[Candidate WebRTC] Admin requesting stream, creating INITIATOR peer...");
             if (peerRef.current) {
               try { peerRef.current.destroy(); } catch (_) {}
               peerRef.current = null;
             }
 
-            console.log("[Candidate WebRTC] Got offer → creating non-initiator peer");
             const peer = new Peer({
-              initiator: false,
-              trickle: false,
-              stream: cam,
+              initiator: true, // WE ARE NOW THE INITIATOR!
+              trickle: true,
+              streams: [cam, scr],
               config: {
                 iceServers: [
                   { urls: "stun:stun.l.google.com:19302" },
@@ -253,31 +259,14 @@ export default function InterviewPage() {
                 ],
               },
             });
-            peer.addStream(scr);
             peerRef.current = peer;
 
             peer.on("signal", (ans) => {
-              console.log("[Candidate WebRTC] Sending answer to admin");
+              console.log("[Candidate WebRTC] Sending offer/ICE to admin");
               socket.emit("signal", { candidateId: String(serverCandidateId), signal: ans });
             });
             peer.on("connect", () => console.log("[Candidate WebRTC] P2P Connected!"));
             peer.on("error",   (e) => console.error("[Candidate WebRTC] Error:", e.message));
-
-            try { peer.signal(data.signal); } catch (e) { console.error("[Candidate WebRTC] Signal err:", e); }
-          });
-
-          // Step 2: Immediately tell admin we're ready (no need to wait for handshake)
-          socket.emit("candidate-ready-to-stream", { candidateId: serverCandidateId });
-          console.log("[Candidate WebRTC] Announced readiness to admin");
-
-          // Step 3: If admin joins LATE and requests re-stream, restart peer
-          socket.on("request-stream-handshake", () => {
-            console.log("[Candidate WebRTC] Admin requesting re-stream, re-announcing...");
-            if (peerRef.current) {
-              try { peerRef.current.destroy(); } catch (_) {}
-              peerRef.current = null;
-            }
-            socket.emit("candidate-ready-to-stream", { candidateId: serverCandidateId });
           });
 
           // Receive warnings from admin
@@ -293,7 +282,8 @@ export default function InterviewPage() {
             handleDisqualify(data.reason || "Terminated by administrator.");
           });
 
-        } catch (_) {
+        } catch (err) {
+          console.error("Failed to start proctoring session API:", err.message);
           sessionIdRef.current = "local-" + Date.now();
         }
 

@@ -40,7 +40,8 @@ const handleSubmit = async (e) => {
     navigate("/redirect");
   } catch (err) {
     console.log(err);
-    alert("Invalid credentials");
+    const msg = err.response?.data?.message || "Invalid credentials or Server Error";
+    alert(msg);
   }
 };
   return (
@@ -81,6 +82,7 @@ const handleSubmit = async (e) => {
           {/* Role Select (for demo) */}
           <select
             className="border border-[var(--border-color)] rounded-lg px-3 py-3 bg-transparent"
+            value={form.role}
             onChange={(e) => setForm({ ...form, role: e.target.value })}
           >
             <option value="user">User</option>

@@ -28,7 +28,8 @@ const handleSubmit = async (e) => {
     navigate("/login");
   } catch (err) {
     console.log(err);
-    alert("Registration failed");
+    const msg = err.response?.data?.message || "Registration failed or Server Error";
+    alert(msg);
   }
 };
 
@@ -79,8 +80,9 @@ const handleSubmit = async (e) => {
             />
           </div>
 
-          <select
+        <select
           className="border border-[var(--border-color)] rounded-lg px-3 py-3 bg-transparent"
+          value={form.role}
           onChange={(e) => setForm({ ...form, role: e.target.value })}
         >
           <option value="user">User</option>
